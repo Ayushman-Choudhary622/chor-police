@@ -2,71 +2,148 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>🚨 Multiplayer Police Thief Game</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎮 Police vs Thief Multiplayer</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <style>
         :root {
-            --bg: linear-gradient(45deg, #1a1a1a, #2c3e50);
-            --card-bg: rgba(255, 255, 255, 0.1);
+            --primary: #ff4757;
+            --secondary: #2ed573;
+            --accent: #ffa502;
+            --bg: linear-gradient(135deg, #1e1e1e, #2d3436);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
 
         body {
-            margin: 0;
-            padding: 20px;
-            font-family: 'Arial', sans-serif;
+            font-family: 'Arial Rounded MT Bold', Arial, sans-serif;
             background: var(--bg);
             color: white;
             min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
         }
 
         .container {
+            width: 100%;
             max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.4);
+            backdrop-filter: blur(10px);
         }
 
-        .player-card {
-            background: var(--card-bg);
-            border-radius: 10px;
-            padding: 15px;
+        h1 {
+            text-align: center;
+            color: var(--primary);
+            font-size: 2.5em;
+            margin: 20px 0;
+            text-shadow: 0 0 15px rgba(255,71,87,0.5);
+        }
+
+        .lobby-section {
+            text-align: center;
+            padding: 20px;
+        }
+
+        input {
+            padding: 12px 20px;
+            border: 2px solid var(--secondary);
+            border-radius: 25px;
             margin: 10px;
-            backdrop-filter: blur(5px);
+            width: 200px;
+            background: rgba(255,255,255,0.1);
+            color: white;
+            font-size: 1em;
         }
 
         button {
-            background: #2ecc71;
-            color: white;
-            padding: 10px 20px;
+            padding: 12px 30px;
             border: none;
-            border-radius: 5px;
+            border-radius: 25px;
+            font-size: 1.1em;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.3s ease;
+            background: var(--secondary);
+            color: white;
+            margin: 10px;
+            box-shadow: 0 4px 15px rgba(46,213,115,0.3);
         }
 
         button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            box-shadow: 0 6px 20px rgba(46,213,115,0.5);
+        }
+
+        .player-card {
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 15px 0;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            animation: cardEnter 0.5s ease;
+        }
+
+        @keyframes cardEnter {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         .role-emoji {
-            font-size: 2em;
-            margin: 10px;
+            font-size: 2.5em;
+            filter: drop-shadow(0 0 5px rgba(255,255,255,0.5));
         }
 
-        #gameArea, #results {
+        #gameArea {
             display: none;
+        }
+
+        #currentRound {
+            color: var(--accent);
+            font-size: 1.5em;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 15px;
+                border-radius: 0;
+            }
+            
+            button, input {
+                width: 100%;
+                margin: 10px 0;
+            }
+            
+            h1 {
+                font-size: 2em;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🚨 Multiplayer Police Thief Game 🦹</h1>
+        <h1>🔫 Police vs Thief 🕵️</h1>
         
-        <!-- Lobby -->
-        <div id="lobby">
-            <button onclick="hostGame()">🎮 Host New Game</button>
+        <!-- Lobby Section -->
+        <div class="lobby-section" id="lobby">
+            <button onclick="hostGame()">🎮 Host Game</button>
             <div style="margin: 20px 0;">
                 <input type="text" id="partyCode" placeholder="Enter Party Code">
                 <button onclick="joinGame()">🔑 Join Game</button>
@@ -77,22 +154,24 @@
 
         <!-- Game Area -->
         <div id="gameArea">
-            <h2>Round <span id="currentRound">1</span>/10</h2>
+            <h2>Round: <span id="currentRound">1</span>/10</h2>
             <div id="rolesDisplay"></div>
-            <div id="actionArea"></div>
+            <div id="actionArea" style="margin: 20px 0;"></div>
             <div id="scores"></div>
         </div>
 
         <!-- Results -->
-        <div id="results">
-            <h2>🏆 Final Results 🏆</h2>
+        <div id="results" style="display: none; text-align: center;">
+            <h2 style="color: var(--accent);">🏆 Game Over! 🏆</h2>
             <div id="finalScores"></div>
-            <button onclick="newGame()">🔄 Play Again</button>
+            <button onclick="location.reload()" style="background: var(--primary); margin-top: 20px;">
+                🔄 Play Again
+            </button>
         </div>
     </div>
 
     <script>
-        // Replace with your Firebase config
+        // Firebase Configuration
 const firebaseConfig = {
   apiKey: "AIzaSyAaLfMrdL4yOCyjfe8-N6VYSnPhAXedAnE",
   authDomain: "final-75d0a.firebaseapp.com",
@@ -101,7 +180,8 @@ const firebaseConfig = {
   storageBucket: "final-75d0a.firebasestorage.app",
   messagingSenderId: "398994407849",
   appId: "1:398994407849:web:779be97831f3aadf4b44b8"
-};e.initializeApp(firebaseConfig);
+};
+        firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
 
         let currentPlayerId = null;
@@ -111,7 +191,7 @@ const firebaseConfig = {
         function hostGame() {
             isHost = true;
             currentPartyCode = Math.random().toString(36).substr(2, 4).toUpperCase();
-            database.ref('parties/' + currentPartyCode).set({
+            database.ref(`parties/${currentPartyCode}`).set({
                 players: {},
                 roles: {},
                 round: 1,
@@ -119,61 +199,55 @@ const firebaseConfig = {
                 status: 'lobby'
             });
             document.getElementById('partyCode').value = currentPartyCode;
-            joinGame(currentPartyCode);
+            joinGame();
         }
 
         function joinGame() {
-            currentPartyCode = document.getElementById('partyCode').value.toUpperCase();
-            if (!currentPartyCode) return;
+            currentPartyCode = document.getElementById('partyCode').value.trim().toUpperCase();
+            if (!currentPartyCode) {
+                alert('Please enter a party code!');
+                return;
+            }
 
-            currentPlayerId = 'P' + Date.now().toString().slice(-3);
-            database.ref('parties/' + currentPartyCode + '/players/' + currentPlayerId).set({
-                ready: true
-            });
-
-            setupGameListeners();
+            currentPlayerId = `PLAYER_${Date.now().toString().slice(-4)}`;
+            database.ref(`parties/${currentPartyCode}/players/${currentPlayerId}`).set(true);
+            setupListeners();
         }
 
-        function setupGameListeners() {
-            const partyRef = database.ref('parties/' + currentPartyCode);
+        function setupListeners() {
+            const partyRef = database.ref(`parties/${currentPartyCode}`);
             
-            partyRef.on('value', (snapshot) => {
-                const data = snapshot.val();
-                if (!data) {
-                    alert("Game not found!");
-                    return;
-                }
-
+            partyRef.on('value', snapshot => {
+                const data = snapshot.val() || {};
+                
                 // Update player list
                 const players = Object.keys(data.players || {});
-                document.getElementById('playersList').innerHTML = 
-                    `Players (${players.length}/3): ${players.join(', ')}`;
-                
-                // Enable start button when 3 players
-                if (isHost) {
-                    document.getElementById('startBtn').disabled = players.length !== 3;
-                }
+                document.getElementById('playersList').innerHTML = `
+                    <h3>👥 Players (${players.length}/3)</h3>
+                    ${players.map(p => `<div class="player-card">🎮 ${p}</div>`).join('')}
+                `;
 
-                // Handle game states
+                // Game state handling
                 if (data.status === 'playing') {
                     document.getElementById('lobby').style.display = 'none';
                     document.getElementById('gameArea').style.display = 'block';
-                    document.getElementById('results').style.display = 'none';
-                    updateGameDisplay(data);
+                    updateGameUI(data);
                 }
 
                 if (data.status === 'ended') {
-                    document.getElementById('gameArea').style.display = 'none';
-                    document.getElementById('results').style.display = 'block';
-                    showFinalResults(data.scores || {});
+                    showResults(data.scores || {});
+                }
+
+                // Host controls
+                if (isHost) {
+                    document.getElementById('startBtn').disabled = players.length !== 3;
                 }
             });
         }
 
         function startGame() {
             if (!isHost) return;
-            
-            database.ref('parties/' + currentPartyCode).update({
+            database.ref(`parties/${currentPartyCode}`).update({
                 status: 'playing',
                 round: 1,
                 scores: {}
@@ -185,105 +259,105 @@ const firebaseConfig = {
             const roles = ['👮 Police', '🦹 Thief', '🧑 Person'];
             const shuffled = [...roles].sort(() => Math.random() - 0.5);
             
-            database.ref('parties/' + currentPartyCode + '/players').once('value').then((snapshot) => {
+            database.ref(`parties/${currentPartyCode}/players`).once('value', snapshot => {
                 const players = Object.keys(snapshot.val() || {});
-                const rolesAssignment = {};
-                players.forEach((player, index) => {
-                    rolesAssignment[player] = shuffled[index];
-                });
-                
-                // Initialize scores
+                const rolesData = {};
                 const scores = {};
-                players.forEach(player => {
+                
+                players.forEach((player, index) => {
+                    rolesData[player] = shuffled[index];
                     scores[player] = 0;
                 });
 
-                database.ref('parties/' + currentPartyCode).update({
-                    roles: rolesAssignment,
+                database.ref(`parties/${currentPartyCode}`).update({
+                    roles: rolesData,
                     scores: scores
                 });
             });
         }
 
         function makeGuess(guessedPlayer) {
-            const partyRef = database.ref('parties/' + currentPartyCode);
+            const partyRef = database.ref(`parties/${currentPartyCode}`);
             
-            partyRef.transaction((data) => {
-                if (!data || !data.roles || !data.scores) return;
-
+            partyRef.transaction(data => {
+                if (!data) return;
+                
                 try {
-                    const policePlayer = Object.entries(data.roles).find(([_, role]) => role === '👮 Police')[0];
-                    const thiefPlayer = Object.entries(data.roles).find(([_, role]) => role === '🦹 Thief')[0];
-                    const personPlayer = Object.entries(data.roles).find(([_, role]) => role === '🧑 Person')[0];
+                    const police = findPlayerByRole(data.roles, '👮 Police');
+                    const thief = findPlayerByRole(data.roles, '🦹 Thief');
+                    const person = findPlayerByRole(data.roles, '🧑 Person');
 
-                    if (guessedPlayer === thiefPlayer) {
-                        data.scores[policePlayer] += 500;
+                    if (guessedPlayer === thief) {
+                        data.scores[police] += 500;
                     } else {
-                        data.scores[thiefPlayer] += 500;
+                        data.scores[thief] += 500;
                     }
-                    data.scores[personPlayer] += 1000;
+                    data.scores[person] += 1000;
 
-                    if (data.round < 10) {
-                        data.round++;
-                        assignRoles();
-                    } else {
-                        data.status = 'ended';
-                    }
-                    
+                    data.round = data.round < 10 ? data.round + 1 : 10;
+                    data.status = data.round === 10 ? 'ended' : 'playing';
+
                     return data;
-                } catch (error) {
-                    console.error("Transaction error:", error);
+                } catch (e) {
+                    console.error('Game error:', e);
                     return;
                 }
             });
         }
 
-        function updateGameDisplay(data) {
-            if (!data || !data.roles || !data.scores) return;
+        function findPlayerByRole(roles, targetRole) {
+            return Object.entries(roles).find(([_, role]) => role === targetRole)[0];
+        }
 
-            // Update round
+        function updateGameUI(data) {
             document.getElementById('currentRound').textContent = data.round;
-
+            
             // Display roles
-            const rolesDisplay = document.getElementById('rolesDisplay');
-            rolesDisplay.innerHTML = Object.entries(data.roles)
+            document.getElementById('rolesDisplay').innerHTML = Object.entries(data.roles)
                 .map(([player, role]) => `
                     <div class="player-card">
                         <div class="role-emoji">${role.split(' ')[0]}</div>
-                        ${player === currentPlayerId ? '🌟 ' : ''}${role}
-                        <div>Score: ${data.scores[player] || 0}</div>
+                        <div>
+                            <h3>${player === currentPlayerId ? '🌟 YOU' : player}</h3>
+                            <p>${role}</p>
+                            <p>💰 Score: ${data.scores[player] || 0}</p>
+                        </div>
                     </div>
                 `).join('');
 
-            // Show action buttons for police
+            // Police actions
             if (data.roles[currentPlayerId] === '👮 Police') {
                 document.getElementById('actionArea').innerHTML = `
-                    <h3>You're the Police! Guess the Thief:</h3>
-                    ${Object.keys(data.players)
+                    <h2 style="color: var(--accent);">🔍 Guess the Thief:</h2>
+                    ${Object.keys(data.roles)
                         .filter(p => p !== currentPlayerId)
                         .map(player => `
-                            <button onclick="makeGuess('${player}')">${player} (${data.roles[player]})</button>
+                            <button onclick="makeGuess('${player}')" 
+                                    style="background: var(--primary);">
+                                🕵️ ${player}
+                            </button>
                         `).join('')}
                 `;
             } else {
                 document.getElementById('actionArea').innerHTML = `
-                    <h3>Waiting for Police to make a guess...</h3>
+                    <h2 style="color: var(--secondary);">⏳ Waiting for Police...</h2>
                 `;
             }
         }
 
-        function showFinalResults(scores) {
-            const sortedScores = Object.entries(scores).sort((a, b) => b[1] - a[1]);
-            document.getElementById('finalScores').innerHTML = sortedScores
+        function showResults(scores) {
+            document.getElementById('gameArea').style.display = 'none';
+            document.getElementById('results').style.display = 'block';
+            
+            const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+            document.getElementById('finalScores').innerHTML = sorted
                 .map(([player, score], index) => `
-                    <div class="player-card" style="font-size: 1.2em;">
-                        ${index === 0 ? '🏆 ' : '🎖️'} ${player}: ${score} points
+                    <div class="player-card" style="background: ${index === 0 ? '#ffd70033' : '#ffffff11'};">
+                        ${['🥇', '🥈', '🥉'][index] || '🎖️'} 
+                        ${player}: ${score} points
+                        ${index === 0 ? '🏆' : ''}
                     </div>
                 `).join('');
-        }
-
-        function newGame() {
-            window.location.reload();
         }
     </script>
 </body>
