@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>🚨 Multiplayer Police Thief Game - Ayush</title>
+    <title>🚨 Multiplayer Police Thief Game</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <style>
@@ -55,7 +55,7 @@
             margin: 10px;
         }
 
-        #gameArea {
+        #gameArea, #results {
             display: none;
         }
     </style>
@@ -84,15 +84,16 @@
         </div>
 
         <!-- Results -->
-        <div id="results" style="display: none;">
+        <div id="results">
             <h2>🏆 Final Results 🏆</h2>
             <div id="finalScores"></div>
+            <button onclick="newGame()">🔄 Play Again</button>
         </div>
     </div>
 
     <script>
         // Replace with your Firebase config
-        const firebaseConfig = {
+const firebaseConfig = {
   apiKey: "AIzaSyAaLfMrdL4yOCyjfe8-N6VYSnPhAXedAnE",
   authDomain: "final-75d0a.firebaseapp.com",
   databaseURL: "https://final-75d0a-default-rtdb.asia-southeast1.firebasedatabase.app",
@@ -100,125 +101,146 @@
   storageBucket: "final-75d0a.firebasestorage.app",
   messagingSenderId: "398994407849",
   appId: "1:398994407849:web:779be97831f3aadf4b44b8"
-};
-        firebase.initializeApp(firebaseConfig);
+};e.initializeApp(firebaseConfig);
         const database = firebase.database();
 
         let currentPlayerId = null;
         let isHost = false;
-        let currentRoles = {};
+        let currentPartyCode = null;
 
         function hostGame() {
             isHost = true;
-            const partyCode = Math.random().toString(36).substr(2, 4).toUpperCase();
-            database.ref('parties/' + partyCode).set({
+            currentPartyCode = Math.random().toString(36).substr(2, 4).toUpperCase();
+            database.ref('parties/' + currentPartyCode).set({
                 players: {},
+                roles: {},
                 round: 1,
-                scores: { A: 0, B: 0, C: 0 },
+                scores: {},
                 status: 'lobby'
             });
-            document.getElementById('partyCode').value = partyCode;
-            joinGame(partyCode);
+            document.getElementById('partyCode').value = currentPartyCode;
+            joinGame(currentPartyCode);
         }
 
         function joinGame() {
-            const partyCode = document.getElementById('partyCode').value.toUpperCase();
-            if (!partyCode) return;
+            currentPartyCode = document.getElementById('partyCode').value.toUpperCase();
+            if (!currentPartyCode) return;
 
             currentPlayerId = 'P' + Date.now().toString().slice(-3);
-            database.ref('parties/' + partyCode + '/players/' + currentPlayerId).set({
-                ready: false,
-                choice: null
+            database.ref('parties/' + currentPartyCode + '/players/' + currentPlayerId).set({
+                ready: true
             });
 
-            setupGameListeners(partyCode);
+            setupGameListeners();
         }
 
-        function setupGameListeners(partyCode) {
-            const partyRef = database.ref('parties/' + partyCode);
+        function setupGameListeners() {
+            const partyRef = database.ref('parties/' + currentPartyCode);
             
             partyRef.on('value', (snapshot) => {
                 const data = snapshot.val();
-                if (!data) return;
+                if (!data) {
+                    alert("Game not found!");
+                    return;
+                }
 
                 // Update player list
-                const players = Object.keys(data.players);
+                const players = Object.keys(data.players || {});
                 document.getElementById('playersList').innerHTML = 
                     `Players (${players.length}/3): ${players.join(', ')}`;
                 
-                // Update game state
+                // Enable start button when 3 players
+                if (isHost) {
+                    document.getElementById('startBtn').disabled = players.length !== 3;
+                }
+
+                // Handle game states
                 if (data.status === 'playing') {
                     document.getElementById('lobby').style.display = 'none';
                     document.getElementById('gameArea').style.display = 'block';
+                    document.getElementById('results').style.display = 'none';
                     updateGameDisplay(data);
                 }
 
                 if (data.status === 'ended') {
-                    showFinalResults(data.scores);
-                }
-
-                // Enable start button when 3 players
-                if (isHost) {
-                    document.getElementById('startBtn').disabled = players.length !== 3;
+                    document.getElementById('gameArea').style.display = 'none';
+                    document.getElementById('results').style.display = 'block';
+                    showFinalResults(data.scores || {});
                 }
             });
         }
 
         function startGame() {
-            const partyCode = document.getElementById('partyCode').value.toUpperCase();
-            database.ref('parties/' + partyCode).update({
+            if (!isHost) return;
+            
+            database.ref('parties/' + currentPartyCode).update({
                 status: 'playing',
-                round: 1
+                round: 1,
+                scores: {}
             });
-            assignRoles(partyCode);
+            assignRoles();
         }
 
-        function assignRoles(partyCode) {
+        function assignRoles() {
             const roles = ['👮 Police', '🦹 Thief', '🧑 Person'];
-            const shuffled = roles.sort(() => Math.random() - 0.5);
+            const shuffled = [...roles].sort(() => Math.random() - 0.5);
             
-            database.ref('parties/' + partyCode).once('value').then((snapshot) => {
-                const players = Object.keys(snapshot.val().players);
+            database.ref('parties/' + currentPartyCode + '/players').once('value').then((snapshot) => {
+                const players = Object.keys(snapshot.val() || {});
                 const rolesAssignment = {};
                 players.forEach((player, index) => {
                     rolesAssignment[player] = shuffled[index];
                 });
-                database.ref('parties/' + partyCode + '/roles').set(rolesAssignment);
+                
+                // Initialize scores
+                const scores = {};
+                players.forEach(player => {
+                    scores[player] = 0;
+                });
+
+                database.ref('parties/' + currentPartyCode).update({
+                    roles: rolesAssignment,
+                    scores: scores
+                });
             });
         }
 
         function makeGuess(guessedPlayer) {
-            const partyCode = document.getElementById('partyCode').value.toUpperCase();
-            const partyRef = database.ref('parties/' + partyCode);
+            const partyRef = database.ref('parties/' + currentPartyCode);
             
             partyRef.transaction((data) => {
-                if (!data) return;
-                
-                const policePlayer = Object.entries(data.roles)
-                    .find(([_, role]) => role === '👮 Police')[0];
-                const thiefPlayer = Object.entries(data.roles)
-                    .find(([_, role]) => role === '🦹 Thief')[0];
-                
-                if (guessedPlayer === thiefPlayer) {
-                    data.scores[policePlayer] += 500;
-                } else {
-                    data.scores[thiefPlayer] += 500;
-                }
-                data.scores[Object.entries(data.roles)
-                    .find(([_, role]) => role === '🧑 Person')[0]] += 1000;
+                if (!data || !data.roles || !data.scores) return;
 
-                if (data.round < 10) {
-                    data.round++;
-                    assignRoles(partyCode);
-                } else {
-                    data.status = 'ended';
+                try {
+                    const policePlayer = Object.entries(data.roles).find(([_, role]) => role === '👮 Police')[0];
+                    const thiefPlayer = Object.entries(data.roles).find(([_, role]) => role === '🦹 Thief')[0];
+                    const personPlayer = Object.entries(data.roles).find(([_, role]) => role === '🧑 Person')[0];
+
+                    if (guessedPlayer === thiefPlayer) {
+                        data.scores[policePlayer] += 500;
+                    } else {
+                        data.scores[thiefPlayer] += 500;
+                    }
+                    data.scores[personPlayer] += 1000;
+
+                    if (data.round < 10) {
+                        data.round++;
+                        assignRoles();
+                    } else {
+                        data.status = 'ended';
+                    }
+                    
+                    return data;
+                } catch (error) {
+                    console.error("Transaction error:", error);
+                    return;
                 }
-                
-                return data;
             });
         }
 
         function updateGameDisplay(data) {
+            if (!data || !data.roles || !data.scores) return;
+
             // Update round
             document.getElementById('currentRound').textContent = data.round;
 
@@ -229,6 +251,7 @@
                     <div class="player-card">
                         <div class="role-emoji">${role.split(' ')[0]}</div>
                         ${player === currentPlayerId ? '🌟 ' : ''}${role}
+                        <div>Score: ${data.scores[player] || 0}</div>
                     </div>
                 `).join('');
 
@@ -239,7 +262,7 @@
                     ${Object.keys(data.players)
                         .filter(p => p !== currentPlayerId)
                         .map(player => `
-                            <button onclick="makeGuess('${player}')">${player}</button>
+                            <button onclick="makeGuess('${player}')">${player} (${data.roles[player]})</button>
                         `).join('')}
                 `;
             } else {
@@ -247,21 +270,9 @@
                     <h3>Waiting for Police to make a guess...</h3>
                 `;
             }
-
-            // Update scores
-            document.getElementById('scores').innerHTML = `
-                <h3>🏅 Current Scores:</h3>
-                ${Object.entries(data.scores)
-                    .map(([player, score]) => `
-                        <div>${player}: ${score} points</div>
-                    `).join('')}
-            `;
         }
 
         function showFinalResults(scores) {
-            document.getElementById('gameArea').style.display = 'none';
-            document.getElementById('results').style.display = 'block';
-            
             const sortedScores = Object.entries(scores).sort((a, b) => b[1] - a[1]);
             document.getElementById('finalScores').innerHTML = sortedScores
                 .map(([player, score], index) => `
@@ -269,6 +280,10 @@
                         ${index === 0 ? '🏆 ' : '🎖️'} ${player}: ${score} points
                     </div>
                 `).join('');
+        }
+
+        function newGame() {
+            window.location.reload();
         }
     </script>
 </body>
