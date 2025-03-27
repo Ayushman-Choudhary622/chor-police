@@ -49,40 +49,6 @@
             text-shadow: 0 0 15px rgba(255,71,87,0.5);
         }
 
-        .lobby-section {
-            text-align: center;
-            padding: 20px;
-        }
-
-        input {
-            padding: 12px 20px;
-            border: 2px solid var(--secondary);
-            border-radius: 25px;
-            margin: 10px;
-            width: 200px;
-            background: rgba(255,255,255,0.1);
-            color: white;
-            font-size: 1em;
-        }
-
-        button {
-            padding: 12px 30px;
-            border: none;
-            border-radius: 25px;
-            font-size: 1.1em;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            background: var(--secondary);
-            color: white;
-            margin: 10px;
-            box-shadow: 0 4px 15px rgba(46,213,115,0.3);
-        }
-
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(46,213,115,0.5);
-        }
-
         .player-card {
             background: rgba(255,255,255,0.1);
             border-radius: 15px;
@@ -104,8 +70,27 @@
             filter: drop-shadow(0 0 5px rgba(255,255,255,0.5));
         }
 
-        #gameArea {
-            display: none;
+        button {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 25px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: var(--secondary);
+            color: white;
+            margin: 10px;
+            box-shadow: 0 4px 15px rgba(46,213,115,0.3);
+        }
+
+        input {
+            padding: 12px 20px;
+            border: 2px solid var(--secondary);
+            border-radius: 25px;
+            margin: 10px;
+            background: rgba(255,255,255,0.1);
+            color: white;
+            font-size: 1em;
         }
 
         #currentRound {
@@ -123,7 +108,6 @@
         @media (max-width: 600px) {
             .container {
                 padding: 15px;
-                border-radius: 0;
             }
             
             button, input {
@@ -172,15 +156,15 @@
 
     <script>
         // Firebase Configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyAaLfMrdL4yOCyjfe8-N6VYSnPhAXedAnE",
-  authDomain: "final-75d0a.firebaseapp.com",
-  databaseURL: "https://final-75d0a-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "final-75d0a",
-  storageBucket: "final-75d0a.firebasestorage.app",
-  messagingSenderId: "398994407849",
-  appId: "1:398994407849:web:779be97831f3aadf4b44b8"
-};
+        const firebaseConfig = {
+            apiKey: "AIzaSyAaLfMrdL4yOCyjfe8-N6VYSnPhAXedAnE",
+            authDomain: "final-75d0a.firebaseapp.com",
+            databaseURL: "https://final-75d0a-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "final-75d0a",
+            storageBucket: "final-75d0a.firebasestorage.app",
+            messagingSenderId: "398994407849",
+            appId: "1:398994407849:web:779be97831f3aadf4b44b8"
+        };
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
 
@@ -227,10 +211,11 @@ const firebaseConfig = {
                     ${players.map(p => `<div class="player-card">🎮 ${p}</div>`).join('')}
                 `;
 
-                // Game state handling
+                // Handle game states
                 if (data.status === 'playing') {
                     document.getElementById('lobby').style.display = 'none';
                     document.getElementById('gameArea').style.display = 'block';
+                    document.getElementById('results').style.display = 'none';
                     updateGameUI(data);
                 }
 
@@ -265,13 +250,14 @@ const firebaseConfig = {
                 const scores = {};
                 
                 players.forEach((player, index) => {
-                    rolesData[player] = shuffled[index];
+                    rolesData[player] = shuffled[index] || '🧑 Person';
                     scores[player] = 0;
                 });
 
                 database.ref(`parties/${currentPartyCode}`).update({
                     roles: rolesData,
-                    scores: scores
+                    scores: scores,
+                    status: 'playing'
                 });
             });
         }
@@ -280,46 +266,58 @@ const firebaseConfig = {
             const partyRef = database.ref(`parties/${currentPartyCode}`);
             
             partyRef.transaction(data => {
-                if (!data) return;
-                
                 try {
+                    if (!data) return;
+                    
+                    // Initialize missing properties
+                    data.roles = data.roles || {};
+                    data.scores = data.scores || {};
+                    data.round = data.round || 1;
+
                     const police = findPlayerByRole(data.roles, '👮 Police');
                     const thief = findPlayerByRole(data.roles, '🦹 Thief');
                     const person = findPlayerByRole(data.roles, '🧑 Person');
 
                     if (guessedPlayer === thief) {
-                        data.scores[police] += 500;
+                        data.scores[police] = (data.scores[police] || 0) + 500;
                     } else {
-                        data.scores[thief] += 500;
+                        data.scores[thief] = (data.scores[thief] || 0) + 500;
                     }
-                    data.scores[person] += 1000;
+                    data.scores[person] = (data.scores[person] || 0) + 1000;
 
                     data.round = data.round < 10 ? data.round + 1 : 10;
                     data.status = data.round === 10 ? 'ended' : 'playing';
 
                     return data;
                 } catch (e) {
-                    console.error('Game error:', e);
-                    return;
+                    console.error('Transaction error:', e);
+                    return data; // Return existing data
                 }
             });
         }
 
         function findPlayerByRole(roles, targetRole) {
-            return Object.entries(roles).find(([_, role]) => role === targetRole)[0];
+            const entry = Object.entries(roles || {}).find(([_, role]) => role === targetRole);
+            return entry ? entry[0] : null;
         }
 
         function updateGameUI(data) {
+            // Null check and initialize properties
+            if (!data) return;
+            data.roles = data.roles || {};
+            data.scores = data.scores || {};
+            data.round = data.round || 1;
+
             document.getElementById('currentRound').textContent = data.round;
             
             // Display roles
             document.getElementById('rolesDisplay').innerHTML = Object.entries(data.roles)
                 .map(([player, role]) => `
                     <div class="player-card">
-                        <div class="role-emoji">${role.split(' ')[0]}</div>
+                        <div class="role-emoji">${(role || '').split(' ')[0]}</div>
                         <div>
                             <h3>${player === currentPlayerId ? '🌟 YOU' : player}</h3>
-                            <p>${role}</p>
+                            <p>${role || 'Unknown Role'}</p>
                             <p>💰 Score: ${data.scores[player] || 0}</p>
                         </div>
                     </div>
@@ -349,12 +347,12 @@ const firebaseConfig = {
             document.getElementById('gameArea').style.display = 'none';
             document.getElementById('results').style.display = 'block';
             
-            const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+            const sorted = Object.entries(scores).sort((a, b) => (b[1] || 0) - (a[1] || 0));
             document.getElementById('finalScores').innerHTML = sorted
                 .map(([player, score], index) => `
                     <div class="player-card" style="background: ${index === 0 ? '#ffd70033' : '#ffffff11'};">
                         ${['🥇', '🥈', '🥉'][index] || '🎖️'} 
-                        ${player}: ${score} points
+                        ${player}: ${score || 0} points
                         ${index === 0 ? '🏆' : ''}
                     </div>
                 `).join('');
