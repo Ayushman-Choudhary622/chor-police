@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🎮 Police vs Thief Multiplayer</title>
+    <title>🔒 Secret Roles Multiplayer Game</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <style>
@@ -65,7 +65,7 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
-        .role-emoji {
+        .role-display {
             font-size: 2.5em;
             filter: drop-shadow(0 0 5px rgba(255,255,255,0.5));
         }
@@ -123,7 +123,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>🔫 Police vs Thief 🕵️</h1>
+        <h1>🕵️ Secret Roles Game</h1>
         
         <!-- Lobby Section -->
         <div class="lobby-section" id="lobby">
@@ -139,9 +139,15 @@
         <!-- Game Area -->
         <div id="gameArea">
             <h2>Round: <span id="currentRound">1</span>/10</h2>
-            <div id="rolesDisplay"></div>
+            <div id="myRole" class="player-card" style="display: none;">
+                <div class="role-display"></div>
+                <div>
+                    <h3>Your Secret Role</h3>
+                    <p id="roleText"></p>
+                    <p>💰 Score: <span id="myScore">0</span></p>
+                </div>
+            </div>
             <div id="actionArea" style="margin: 20px 0;"></div>
-            <div id="scores"></div>
         </div>
 
         <!-- Results -->
@@ -155,7 +161,6 @@
     </div>
 
     <script>
-        // Firebase Configuration
         const firebaseConfig = {
             apiKey: "AIzaSyAaLfMrdL4yOCyjfe8-N6VYSnPhAXedAnE",
             authDomain: "final-75d0a.firebaseapp.com",
@@ -240,17 +245,26 @@
             assignRoles();
         }
 
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
         function assignRoles() {
             const roles = ['👮 Police', '🦹 Thief', '🧑 Person'];
-            const shuffled = [...roles].sort(() => Math.random() - 0.5);
             
             database.ref(`parties/${currentPartyCode}/players`).once('value', snapshot => {
-                const players = Object.keys(snapshot.val() || {});
+                const players = shuffleArray(Object.keys(snapshot.val() || {}));
+                const shuffledRoles = shuffleArray([...roles]);
+
                 const rolesData = {};
                 const scores = {};
                 
                 players.forEach((player, index) => {
-                    rolesData[player] = shuffled[index] || '🧑 Person';
+                    rolesData[player] = shuffledRoles[index];
                     scores[player] = 0;
                 });
 
@@ -269,7 +283,7 @@
                 try {
                     if (!data) return;
                     
-                    // Initialize missing properties
+                    // Initialize properties
                     data.roles = data.roles || {};
                     data.scores = data.scores || {};
                     data.round = data.round || 1;
@@ -291,7 +305,7 @@
                     return data;
                 } catch (e) {
                     console.error('Transaction error:', e);
-                    return data; // Return existing data
+                    return data;
                 }
             });
         }
@@ -302,37 +316,27 @@
         }
 
         function updateGameUI(data) {
-            // Null check and initialize properties
             if (!data) return;
-            data.roles = data.roles || {};
-            data.scores = data.scores || {};
-            data.round = data.round || 1;
-
-            document.getElementById('currentRound').textContent = data.round;
             
-            // Display roles
-            document.getElementById('rolesDisplay').innerHTML = Object.entries(data.roles)
-                .map(([player, role]) => `
-                    <div class="player-card">
-                        <div class="role-emoji">${(role || '').split(' ')[0]}</div>
-                        <div>
-                            <h3>${player === currentPlayerId ? '🌟 YOU' : player}</h3>
-                            <p>${role || 'Unknown Role'}</p>
-                            <p>💰 Score: ${data.scores[player] || 0}</p>
-                        </div>
-                    </div>
-                `).join('');
+            // Show current player's role
+            const myRole = data.roles?.[currentPlayerId] || 'Unknown Role';
+            const [emoji, roleName] = myRole.split(' ');
+            
+            document.getElementById('myRole').style.display = 'flex';
+            document.getElementById('roleText').textContent = roleName;
+            document.querySelector('.role-display').textContent = emoji;
+            document.getElementById('myScore').textContent = data.scores?.[currentPlayerId] || 0;
 
             // Police actions
-            if (data.roles[currentPlayerId] === '👮 Police') {
+            if (myRole === '👮 Police') {
                 document.getElementById('actionArea').innerHTML = `
                     <h2 style="color: var(--accent);">🔍 Guess the Thief:</h2>
-                    ${Object.keys(data.roles)
+                    ${Object.keys(data.roles || {})
                         .filter(p => p !== currentPlayerId)
                         .map(player => `
                             <button onclick="makeGuess('${player}')" 
                                     style="background: var(--primary);">
-                                🕵️ ${player}
+                                Player ${player.slice(-4)}
                             </button>
                         `).join('')}
                 `;
@@ -341,6 +345,8 @@
                     <h2 style="color: var(--secondary);">⏳ Waiting for Police...</h2>
                 `;
             }
+
+            document.getElementById('currentRound').textContent = data.round || 1;
         }
 
         function showResults(scores) {
